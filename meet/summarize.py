@@ -149,6 +149,8 @@ def summarize(
     transcript_text: str,
     config: SummaryConfig | None = None,
     language: str | None = None,
+    backend: str = "auto",
+    meeting_type: str = "general",
 ) -> MeetingSummary:
     """Generate a structured meeting summary from transcript text.
 
@@ -159,12 +161,16 @@ def summarize(
         language: Language code of the transcript (e.g. "de", "fa").
             When provided (and not "en"), the LLM is instructed to
             write the summary in that language.
+        backend: "auto", "claude", or "ollama". Auto-detection tries
+            Claude first (if ANTHROPIC_API_KEY is set), then Ollama.
+        meeting_type: One of "general", "class", "business", "board",
+            "training". Appends context-specific prompt instructions.
 
     Returns:
         MeetingSummary with the Markdown summary, model used, and timing.
 
     Raises:
-        ConnectionError: If Ollama is not reachable.
+        ConnectionError: If no summarization backend is available.
         RuntimeError: If the model fails to generate a response.
     """
     import time
@@ -172,14 +178,46 @@ def summarize(
     if config is None:
         config = SummaryConfig()
 
-    if not is_ollama_available(config.ollama_url):
-        raise ConnectionError(
-            f"Ollama is not running at {config.ollama_url}. "
-            "Start it with: ollama serve"
+    # ── Backend routing ──
+    if backend == "claude":
+        from meet.claude_backend import summarize_claude, ClaudeConfig
+        claude_config = ClaudeConfig()
+        return summarize_claude(
+            transcript_text, claude_config,
+            language=language, meeting_type=meeting_type,
         )
 
-    # Build prompts with language-aware section headers.
+    if backend == "auto":
+        from meet.claude_backend import is_claude_available
+        if is_claude_available():
+            from meet.claude_backend import summarize_claude, ClaudeConfig
+            claude_config = ClaudeConfig()
+            return summarize_claude(
+                transcript_text, claude_config,
+                language=language, meeting_type=meeting_type,
+            )
+        # Fall through to Ollama
+
+    # ── Ollama backend ──
+    if not is_ollama_available(config.ollama_url):
+        if backend == "ollama":
+            raise ConnectionError(
+                f"Ollama is not running at {config.ollama_url}. "
+                "Start it with: ollama serve"
+            )
+        raise ConnectionError(
+            "No summarization backend available.\n"
+            "  Option 1: export ANTHROPIC_API_KEY=sk-ant-... && pip install anthropic\n"
+            "  Option 2: ollama serve"
+        )
+
+    # Build prompts with language-aware section headers + meeting type.
     system_prompt = _build_system_prompt(language)
+
+    from meet.languages import MEETING_TYPE_PROMPTS
+    type_suffix = MEETING_TYPE_PROMPTS.get(meeting_type, "")
+    if type_suffix:
+        system_prompt += "\n\n" + type_suffix
 
     if language and language != "en":
         lang_name = _LANGUAGE_NAMES.get(language, language)

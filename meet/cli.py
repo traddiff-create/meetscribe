@@ -58,28 +58,35 @@ def _drain_countdown(session, seconds: int = DRAIN_SECONDS) -> None:
         signal.signal(signal.SIGINT, prev_handler)
 
 
-def _generate_summary(transcript, out_dir, basename, summary_model, files):
-    """Generate an AI meeting summary via Ollama. Returns MeetingSummary or None."""
-    from meet.summarize import summarize as do_summarize, SummaryConfig, is_ollama_available
-
-    if not is_ollama_available():
-        click.echo("  Ollama not running — skipping summary. Start with: ollama serve")
-        return None
+def _generate_summary(transcript, out_dir, basename, summary_model, files,
+                      summary_backend="auto", meeting_type="general"):
+    """Generate an AI meeting summary. Returns MeetingSummary or None."""
+    from meet.summarize import summarize as do_summarize, SummaryConfig
 
     config_kwargs = {}
     if summary_model:
         config_kwargs["model"] = summary_model
     summary_config = SummaryConfig(**config_kwargs)
 
-    click.echo(f"Generating meeting summary ({summary_config.model})...")
+    # Determine what we're using for the status message
+    if summary_backend == "claude":
+        label = "Claude API"
+    elif summary_backend == "ollama":
+        label = summary_config.model
+    else:
+        label = "auto-detect"
+
+    click.echo(f"Generating meeting summary ({label})...")
     try:
         result = do_summarize(
             transcript.to_text(), summary_config,
             language=transcript.language,
+            backend=summary_backend,
+            meeting_type=meeting_type,
         )
         path = result.save(out_dir, basename)
         files["summary"] = path
-        click.echo(f"  Summary generated in {result.elapsed_seconds:.1f}s")
+        click.echo(f"  Summary generated in {result.elapsed_seconds:.1f}s ({result.model})")
         return result
     except Exception as exc:
         click.echo(f"  Summary failed: {exc}", err=True)
@@ -240,9 +247,14 @@ def record(output_dir, filename, mic, monitor, virtual_sink):
               help="Ollama model for summary (default: qwen3.5:9b)")
 @click.option("--skip-alignment", is_flag=True, default=False,
               help="Skip word-level alignment (useful if alignment model is unavailable)")
+@click.option("--summary-backend", type=click.Choice(["auto", "claude", "ollama"]),
+              default="auto", help="Summarization backend (default: auto)")
+@click.option("--meeting-type", type=click.Choice(["general", "class", "business", "board", "training"]),
+              default="general", help="Meeting type for context-aware prompts (default: general)")
 def transcribe(audio_file, model, device, compute_type, batch_size,
                language, hf_token, min_speakers, max_speakers, output_dir,
-               no_diarize, summarize, summary_model, skip_alignment):
+               no_diarize, summarize, summary_model, skip_alignment,
+               summary_backend, meeting_type):
     """Transcribe a recorded audio file with speaker diarization."""
     from meet.transcribe import (
         TranscriptionConfig, transcribe as do_transcribe,
@@ -313,7 +325,10 @@ def transcribe(audio_file, model, device, compute_type, batch_size,
     # ── Summary + PDF ──
     summary_result = None
     if summarize:
-        summary_result = _generate_summary(transcript, out_dir, audio_path.stem, summary_model, files)
+        summary_result = _generate_summary(
+            transcript, out_dir, audio_path.stem, summary_model, files,
+            summary_backend=summary_backend, meeting_type=meeting_type,
+        )
 
     _generate_pdf(transcript, out_dir, audio_path.stem, summary_result, files)
 
@@ -357,9 +372,14 @@ def transcribe(audio_file, model, device, compute_type, batch_size,
               help="Ollama model for summary (default: qwen3.5:9b)")
 @click.option("--skip-alignment", is_flag=True, default=False,
               help="Skip word-level alignment (useful if alignment model is unavailable)")
+@click.option("--summary-backend", type=click.Choice(["auto", "claude", "ollama"]),
+              default="auto", help="Summarization backend (default: auto)")
+@click.option("--meeting-type", type=click.Choice(["general", "class", "business", "board", "training"]),
+              default="general", help="Meeting type for context-aware prompts (default: general)")
 def run(output_dir, model, device, compute_type, batch_size,
         language, hf_token, min_speakers, max_speakers, virtual_sink,
-        summarize, summary_model, skip_alignment):
+        summarize, summary_model, skip_alignment,
+        summary_backend, meeting_type):
     """Record a meeting, then transcribe when stopped with Ctrl+C."""
     from meet.capture import create_session, check_prerequisites
     from meet.transcribe import (
@@ -446,7 +466,10 @@ def run(output_dir, model, device, compute_type, batch_size,
         # ── Summary + PDF ──
         summary_result = None
         if summarize:
-            summary_result = _generate_summary(transcript, output.parent, output.stem, summary_model, files)
+            summary_result = _generate_summary(
+                transcript, output.parent, output.stem, summary_model, files,
+                summary_backend=summary_backend, meeting_type=meeting_type,
+            )
 
         _generate_pdf(transcript, output.parent, output.stem, summary_result, files)
 
@@ -906,9 +929,13 @@ def label(session_dir, no_audio, no_summary):
               help="Generate AI meeting summary (default: on)")
 @click.option("--summary-model", type=str, default=None,
               help="Ollama model for summary (default: qwen3.5:9b)")
+@click.option("--summary-backend", type=click.Choice(["auto", "claude", "ollama"]),
+              default="auto", help="Summarization backend (default: auto)")
+@click.option("--meeting-type", type=click.Choice(["general", "class", "business", "board", "training"]),
+              default="general", help="Meeting type for context-aware prompts (default: general)")
 def gui(output_dir, model, device, compute_type, batch_size,
         language, hf_token, min_speakers, max_speakers, virtual_sink,
-        mic, monitor, summarize, summary_model):
+        mic, monitor, summarize, summary_model, summary_backend, meeting_type):
     """Launch the GUI recording widget."""
     from meet.gui import launch
 
@@ -927,6 +954,8 @@ def gui(output_dir, model, device, compute_type, batch_size,
         monitor=monitor,
         summarize=summarize,
         summary_model=summary_model,
+        summary_backend=summary_backend,
+        meeting_type=meeting_type,
     )
 
 

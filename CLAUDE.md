@@ -14,7 +14,7 @@ Originally Linux-only (PulseAudio/PipeWire + GTK3). This fork adds macOS support
 - Python 3.10+, Click (CLI), ReportLab (PDF)
 - WhisperX + faster-whisper (transcription)
 - pyannote-audio (speaker diarization)
-- Ollama (AI summaries, local)
+- Ollama (AI summaries, local) or Claude API (cloud, via `anthropic` SDK)
 - ffmpeg + AVFoundation (macOS audio capture)
 - BlackHole (virtual audio driver for system audio)
 
@@ -24,7 +24,9 @@ Originally Linux-only (PulseAudio/PipeWire + GTK3). This fork adds macOS support
 - `meet/capture_macos.py` — macOS AVFoundation audio capture via ffmpeg
 - `meet/transcribe.py` — WhisperX pipeline with MPS/CUDA/CPU auto-detection
 - `meet/cli.py` — Click CLI entrypoint
-- `meet/pdf.py`, `meet/summarize.py`, `meet/label.py` — Cross-platform modules
+- `meet/summarize.py` — Summary orchestration with backend routing (auto/claude/ollama)
+- `meet/claude_backend.py` — Claude API summarization with meeting-type-aware prompts
+- `meet/pdf.py`, `meet/label.py` — Cross-platform modules
 
 ## macOS Prerequisites
 

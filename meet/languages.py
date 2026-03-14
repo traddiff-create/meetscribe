@@ -89,6 +89,44 @@ SECTION_HEADERS: dict[str, dict[str, str]] = {
 
 # ─── PDF section labels ────────────────────────────────────────────────────
 
+# ─── Meeting type prompts (appended to base system prompt) ────────────────
+
+MEETING_TYPE_PROMPTS: dict[str, str] = {
+    "general": "",
+    "class": (
+        "This is a yoga, breathwork, or wellness class recording. Focus on: "
+        "techniques and sequences taught, verbal cues and instructions given by "
+        "the instructor, any modifications or variations offered, student questions "
+        "and the instructor's responses, and the overall flow of the session. "
+        "Use wellness-appropriate language."
+    ),
+    "business": (
+        "This is a business meeting. Focus on: concrete decisions made with owners "
+        "and deadlines, action items assigned to specific people, pricing discussions "
+        "and financial figures mentioned, project timelines and milestones, and any "
+        "follow-up meetings or deliverables agreed upon. Be precise with numbers "
+        "and commitments."
+    ),
+    "board": (
+        "This is a nonprofit board meeting. Focus on: motions made and how they "
+        "were voted on (passed/failed/tabled), financial reports and budget items "
+        "discussed, committee reports and updates, any bylaws or policy changes, "
+        "and items requiring follow-up before the next meeting. Use formal "
+        "parliamentary language where appropriate."
+    ),
+    "training": (
+        "This is a professional training or continuing education session. Focus on: "
+        "key concepts and frameworks taught, techniques or methodologies demonstrated, "
+        "CE-relevant takeaways and learning objectives covered, practical exercises "
+        "or case studies discussed, and any resources or references mentioned. "
+        "Highlight material that would be relevant for CE credit documentation."
+    ),
+}
+"""Meeting-type-specific prompt suffixes for context-aware summaries."""
+
+
+# ─── PDF section labels ────────────────────────────────────────────────────
+
 PDF_SECTIONS: dict[str, dict[str, str]] = {
     "en": {"summary": "AI Meeting Summary", "transcript": "Full Transcript"},
     "de": {"summary": "KI-Besprechungszusammenfassung", "transcript": "Vollständiges Transkript"},

@@ -269,14 +269,60 @@ Example `.txt` output:
 
 ## AI summary
 
-When Ollama is running, meetscribe generates a structured meeting summary with:
+meetscribe generates structured meeting summaries with:
 - Overview
 - Key topics discussed
 - Action items (with owners when mentioned)
 - Decisions made
 - Open questions / follow-ups
 
-### Supported models
+### Summarization backends
+
+meetscribe supports two summarization backends:
+
+| Backend | Requires | Pros |
+|---------|----------|------|
+| **Claude API** | `ANTHROPIC_API_KEY` + `pip install anthropic` | High quality, no local GPU needed, meeting-type-aware prompts |
+| **Ollama** (local) | Ollama running + ~7-9 GB model | Fully offline, no API costs |
+
+By default (`--summary-backend auto`), meetscribe tries Claude first (if
+`ANTHROPIC_API_KEY` is set), then falls back to Ollama.
+
+#### Claude API setup
+
+```bash
+pip install "meetscribe-offline[claude]"
+export ANTHROPIC_API_KEY=sk-ant-...
+
+meet run --summary-backend claude
+meet run --summary-backend claude --meeting-type class
+```
+
+#### Ollama setup (local)
+
+```bash
+meet run --summary-backend ollama
+meet run --summary-backend ollama --summary-model gemma3:12b
+```
+
+### Meeting type prompts
+
+Use `--meeting-type` to get context-aware summaries tailored to specific scenarios:
+
+| Type | Use case | Prompt focus |
+|------|----------|--------------|
+| `general` | Default | Standard meeting summary |
+| `class` | Yoga, breathwork, wellness | Techniques, cues, sequences, student questions |
+| `business` | Client meetings, strategy | Decisions, action items, pricing, timelines, owners |
+| `board` | Nonprofit board meetings | Motions, votes, financials, committee reports |
+| `training` | CE courses, workshops | Key concepts, techniques, CE-relevant takeaways |
+
+```bash
+meet run --meeting-type business
+meet run --meeting-type class --summary-backend claude
+```
+
+### Ollama models
 
 | Model | Size | Speed | Notes |
 |-------|------|-------|-------|

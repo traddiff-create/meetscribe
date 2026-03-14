@@ -54,6 +54,7 @@ Repository = "https://github.com/pretyflaco/meetscribe"
 Issues = "https://github.com/pretyflaco/meetscribe/issues"
 
 [project.optional-dependencies]
+claude = ["anthropic>=0.28"]
 rtl = ["arabic-reshaper>=3.0", "python-bidi>=0.4"]
 linux = ["pulsectl>=23.0"]
 dev = ["ruff", "pytest"]
