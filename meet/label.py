@@ -264,7 +264,9 @@ def extract_speaker_clip(
 
 
 def play_clip(clip_path: str | Path) -> subprocess.Popen:
-    """Play an audio clip using ffplay.
+    """Play an audio clip using the platform's audio player.
+
+    Uses afplay on macOS, ffplay on Linux.
 
     Args:
         clip_path: Path to a WAV file to play.
@@ -273,8 +275,13 @@ def play_clip(clip_path: str | Path) -> subprocess.Popen:
         The subprocess.Popen object. Call .wait() to block until playback
         finishes, or .kill() to stop early.
     """
+    import platform
+    if platform.system() == "Darwin":
+        cmd = ["afplay", str(clip_path)]
+    else:
+        cmd = ["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet", str(clip_path)]
     return subprocess.Popen(
-        ["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet", str(clip_path)],
+        cmd,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )

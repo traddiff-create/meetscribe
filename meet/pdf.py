@@ -46,11 +46,33 @@ if TYPE_CHECKING:
 # ─── Font registration ──────────────────────────────────────────────────────
 
 # DejaVu Sans covers Latin, Cyrillic, Greek, Turkish, and most European scripts.
-_DEJAVU_REGULAR = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
-_DEJAVU_BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 # Noto Naskh Arabic for Farsi/Persian RTL text.
-_NOTO_ARABIC_REGULAR = "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf"
-_NOTO_ARABIC_BOLD = "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Bold.ttf"
+import platform as _platform
+
+
+def _find_font(name: str, fallback: str) -> str:
+    """Search platform-appropriate font directories for a TrueType font."""
+    if _platform.system() == "Darwin":
+        search_dirs = [
+            "/opt/homebrew/share/fonts",
+            "/Library/Fonts",
+            str(Path.home() / "Library/Fonts"),
+            "/System/Library/Fonts/Supplemental",
+        ]
+    else:
+        search_dirs = [
+            "/usr/share/fonts",
+        ]
+    for d in search_dirs:
+        for match in Path(d).rglob(name):
+            return str(match)
+    return fallback
+
+
+_DEJAVU_REGULAR = _find_font("DejaVuSans.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")
+_DEJAVU_BOLD = _find_font("DejaVuSans-Bold.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf")
+_NOTO_ARABIC_REGULAR = _find_font("NotoNaskhArabic-Regular.ttf", "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf")
+_NOTO_ARABIC_BOLD = _find_font("NotoNaskhArabic-Bold.ttf", "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Bold.ttf")
 
 _fonts_registered = False
 

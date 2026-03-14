@@ -36,7 +36,8 @@ including browser-based meetings and standalone desktop clients.
 ## Features
 
 - **Dual-channel audio capture** -- records your mic (left channel) and remote
-  participants (right channel) simultaneously via PipeWire/PulseAudio + ffmpeg
+  participants (right channel) simultaneously via PipeWire/PulseAudio (Linux)
+  or BlackHole (macOS) + ffmpeg
 - **WhisperX transcription** -- fast batched inference with
   `openai/whisper-large-v3-turbo`, word-level timestamps via wav2vec2 alignment
 - **Multilingual** -- auto-detects language or manually set it; supports
@@ -71,18 +72,28 @@ meet run
 
 ## Requirements
 
-- **Linux** with PipeWire or PulseAudio
-- **NVIDIA GPU** with CUDA (8GB+ VRAM recommended; CPU mode available but slower)
-- **Python 3.10+**
-- **ffmpeg**
-- **HuggingFace token** (free) for the diarization model
-- **Ollama** (optional) for AI meeting summaries
+**Linux:**
+- PipeWire or PulseAudio
+- NVIDIA GPU with CUDA (8GB+ VRAM recommended; CPU mode available but slower)
+
+**macOS:**
+- macOS 12+ (Monterey or later)
+- Apple Silicon (MPS GPU acceleration) or Intel (CPU mode)
+- BlackHole virtual audio driver (for system audio capture)
+
+**Both platforms:**
+- Python 3.10+
+- ffmpeg
+- HuggingFace token (free) for the diarization model
+- Ollama (optional) for AI meeting summaries
 
 See [REQUIREMENTS.md](REQUIREMENTS.md) for full hardware/software details.
 
 ## Installation
 
 ### 1. System dependencies
+
+**Linux:**
 
 ```bash
 # Ubuntu / Pop!_OS / Debian
@@ -91,6 +102,19 @@ sudo apt install ffmpeg pulseaudio-utils
 # Fedora
 sudo dnf install ffmpeg pulseaudio-utils
 ```
+
+**macOS:**
+
+```bash
+brew install ffmpeg blackhole-2ch
+```
+
+Then set up a Multi-Output Device so you can hear audio while it's being captured:
+
+1. Open **Audio MIDI Setup** (`/Applications/Utilities/Audio MIDI Setup.app`)
+2. Click **+** at bottom left → **Create Multi-Output Device**
+3. Check both your **speakers/headphones** AND **BlackHole 2ch**
+4. Set the Multi-Output Device as your system output in **System Settings → Sound**
 
 ### 2. Install meetscribe
 

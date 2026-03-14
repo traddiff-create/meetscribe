@@ -687,3 +687,21 @@ def check_prerequisites() -> list[str]:
         issues.append(f"Cannot communicate with audio server: {e}")
 
     return issues
+
+
+# ─── Platform dispatch ──────────────────────────────────────────────────────
+# On macOS, replace PulseAudio module-level functions with AVFoundation equivalents.
+# This lets the CLI and other modules do `from meet.capture import list_sources`
+# without caring about the platform.
+
+import platform as _platform
+
+if _platform.system() == "Darwin":
+    from meet.capture_macos import (  # noqa: F811
+        list_sources,
+        get_default_source,
+        get_default_sink,
+        get_monitor_source,
+        create_session,
+        check_prerequisites,
+    )

@@ -185,7 +185,11 @@ def record(output_dir, filename, mic, monitor, virtual_sink):
     click.echo(f"  Monitor source: {session.monitor_source}")
     click.echo(f"  Virtual sink:   {session.use_virtual_sink}")
     if virtual_sink:
-        click.echo(f"  NOTE: Route your meeting app's audio to 'Meet-Capture' in pavucontrol")
+        import platform
+        if platform.system() == "Darwin":
+            click.echo(f"  NOTE: Set your system output to 'Multi-Output Device' in Sound settings")
+        else:
+            click.echo(f"  NOTE: Route your meeting app's audio to 'Meet-Capture' in pavucontrol")
     click.echo()
 
     session.start()
@@ -212,7 +216,7 @@ def record(output_dir, filename, mic, monitor, virtual_sink):
 @click.argument("audio_file", type=click.Path(exists=True))
 @click.option("--model", "-m", type=str, default="large-v3-turbo",
               help="Whisper model (default: large-v3-turbo). Also: base, medium, large-v2, or a local path.")
-@click.option("--device", type=click.Choice(["cuda", "cpu"]), default="cuda",
+@click.option("--device", type=click.Choice(["cuda", "mps", "cpu"]), default=None,
               help="Device to run on (default: cuda)")
 @click.option("--compute-type", type=str, default="float16",
               help="Compute type: float16, int8 (default: float16)")
@@ -258,7 +262,7 @@ def transcribe(audio_file, model, device, compute_type, batch_size,
 
     config = TranscriptionConfig(
         model=model,
-        device=device,
+        device=device or "",
         compute_type=compute_type,
         batch_size=batch_size,
         language=language,
@@ -339,7 +343,7 @@ def transcribe(audio_file, model, device, compute_type, batch_size,
               help="Directory for recordings and transcripts")
 @click.option("--model", "-m", type=str, default="large-v3-turbo",
               help="Whisper model (default: large-v3-turbo)")
-@click.option("--device", type=click.Choice(["cuda", "cpu"]), default="cuda")
+@click.option("--device", type=click.Choice(["cuda", "mps", "cpu"]), default=None)
 @click.option("--compute-type", type=str, default="float16")
 @click.option("--batch-size", "-b", type=int, default=16)
 @click.option("--language", "-l", type=str, default="auto")
@@ -377,7 +381,7 @@ def run(output_dir, model, device, compute_type, batch_size,
 
     config = TranscriptionConfig(
         model=model,
-        device=device,
+        device=device or "",
         compute_type=compute_type,
         batch_size=batch_size,
         language=language,
@@ -509,8 +513,13 @@ def check():
             click.echo(f"  - {issue}")
         sys.exit(1)
     else:
-        click.echo("  ffmpeg:           OK")
-        click.echo("  PulseAudio/PipeWire: OK")
+        import platform
+        if platform.system() == "Darwin":
+            click.echo("  ffmpeg:           OK")
+            click.echo("  BlackHole:        OK")
+        else:
+            click.echo("  ffmpeg:           OK")
+            click.echo("  PulseAudio/PipeWire: OK")
 
     # Check Python packages
     click.echo()
@@ -522,12 +531,16 @@ def check():
 
     try:
         import torch
+        import platform
         cuda_available = torch.cuda.is_available()
+        mps_available = hasattr(torch.backends, "mps") and torch.backends.mps.is_available()
         if cuda_available:
             gpu_name = torch.cuda.get_device_name(0)
             click.echo(f"  CUDA:             OK ({gpu_name})")
+        elif mps_available:
+            click.echo(f"  MPS (Apple GPU):  OK")
         else:
-            click.echo(f"  CUDA:             Not available (will use CPU)")
+            click.echo(f"  GPU:              Not available (will use CPU)")
     except ImportError:
         click.echo(f"  torch:            NOT INSTALLED")
 
@@ -877,7 +890,7 @@ def label(session_dir, no_audio, no_summary):
               help="Directory for recordings and transcripts")
 @click.option("--model", "-m", type=str, default="large-v3-turbo",
               help="Whisper model (default: large-v3-turbo)")
-@click.option("--device", type=click.Choice(["cuda", "cpu"]), default="cuda")
+@click.option("--device", type=click.Choice(["cuda", "mps", "cpu"]), default=None)
 @click.option("--compute-type", type=str, default="float16")
 @click.option("--batch-size", "-b", type=int, default=16)
 @click.option("--language", "-l", type=str, default="auto")

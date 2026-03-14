@@ -20,71 +20,67 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-# Fix for CUDA NVRTC version mismatch: pyannote's wespeaker embedding model
-# uses torch.vmap -> torch.fft.rfft which triggers NVRTC JIT compilation.
-# If the driver reports CUDA 13.0 but only libnvrtc-builtins.so.12.x is
-# installed, we create a symlink so NVRTC can find it.
-_NVRTC_FIX_DIR = Path.home() / ".local" / "lib" / "cuda"
+# Fix for CUDA NVRTC version mismatch (Linux only): pyannote's wespeaker
+# embedding model uses torch.vmap -> torch.fft.rfft which triggers NVRTC JIT
+# compilation.  If the driver reports CUDA 13.0 but only
+# libnvrtc-builtins.so.12.x is installed, we create a symlink so NVRTC can
+# find it.  Skipped on macOS where CUDA is not available.
+import platform as _platform
 
+if _platform.system() != "Darwin":
+    _NVRTC_FIX_DIR = Path.home() / ".local" / "lib" / "cuda"
 
-def _ensure_nvrtc_compat():
-    """Create a compatibility symlink for libnvrtc-builtins if needed."""
-    target = _NVRTC_FIX_DIR / "libnvrtc-builtins.so.13.0"
-    if target.exists():
-        # Already fixed — just ensure LD_LIBRARY_PATH includes our dir
+    def _ensure_nvrtc_compat():
+        """Create a compatibility symlink for libnvrtc-builtins if needed."""
+        target = _NVRTC_FIX_DIR / "libnvrtc-builtins.so.13.0"
+        if target.exists():
+            _add_to_ld_path()
+            return
+
+        search_dirs = []
+        try:
+            import importlib.util
+            spec = importlib.util.find_spec("nvidia.cuda_nvrtc")
+            if spec and spec.origin:
+                pkg_dir = Path(spec.origin).parent / "lib"
+                if pkg_dir.is_dir():
+                    search_dirs.append(pkg_dir)
+        except (ImportError, ModuleNotFoundError, ValueError):
+            pass
+
+        search_dirs.extend([
+            Path("/usr/local/cuda/lib64"),
+            Path("/usr/lib/x86_64-linux-gnu"),
+        ])
+
+        conda_prefix = os.environ.get("CONDA_PREFIX")
+        if conda_prefix:
+            search_dirs.append(Path(conda_prefix) / "lib")
+
+        candidates = []
+        for d in search_dirs:
+            if d.is_dir():
+                found = sorted(d.glob("libnvrtc-builtins.so.*"))
+                candidates.extend(c for c in found if "alt" not in c.name)
+
+        if not candidates:
+            return
+
+        _NVRTC_FIX_DIR.mkdir(parents=True, exist_ok=True)
+        try:
+            target.symlink_to(candidates[-1])
+        except OSError:
+            return
         _add_to_ld_path()
-        return
 
-    # Find the real library by searching common locations.
-    # 1. Try the nvidia.cuda_nvrtc Python package (works across Python versions)
-    search_dirs = []
-    try:
-        import importlib.util
-        spec = importlib.util.find_spec("nvidia.cuda_nvrtc")
-        if spec and spec.origin:
-            pkg_dir = Path(spec.origin).parent / "lib"
-            if pkg_dir.is_dir():
-                search_dirs.append(pkg_dir)
-    except (ImportError, ModuleNotFoundError, ValueError):
-        pass
+    def _add_to_ld_path():
+        """Add the NVRTC fix directory to LD_LIBRARY_PATH."""
+        fix_dir = str(_NVRTC_FIX_DIR)
+        ld_path = os.environ.get("LD_LIBRARY_PATH", "")
+        if fix_dir not in ld_path:
+            os.environ["LD_LIBRARY_PATH"] = f"{fix_dir}:{ld_path}" if ld_path else fix_dir
 
-    # 2. Common system paths
-    search_dirs.extend([
-        Path("/usr/local/cuda/lib64"),
-        Path("/usr/lib/x86_64-linux-gnu"),
-    ])
-
-    # 3. Conda prefix if set
-    conda_prefix = os.environ.get("CONDA_PREFIX")
-    if conda_prefix:
-        search_dirs.append(Path(conda_prefix) / "lib")
-
-    candidates = []
-    for d in search_dirs:
-        if d.is_dir():
-            found = sorted(d.glob("libnvrtc-builtins.so.*"))
-            candidates.extend(c for c in found if "alt" not in c.name)
-
-    if not candidates:
-        return  # Nothing we can do
-
-    _NVRTC_FIX_DIR.mkdir(parents=True, exist_ok=True)
-    try:
-        target.symlink_to(candidates[-1])  # Use the latest version
-    except OSError:
-        return
-    _add_to_ld_path()
-
-
-def _add_to_ld_path():
-    """Add the NVRTC fix directory to LD_LIBRARY_PATH."""
-    fix_dir = str(_NVRTC_FIX_DIR)
-    ld_path = os.environ.get("LD_LIBRARY_PATH", "")
-    if fix_dir not in ld_path:
-        os.environ["LD_LIBRARY_PATH"] = f"{fix_dir}:{ld_path}" if ld_path else fix_dir
-
-
-_ensure_nvrtc_compat()
+    _ensure_nvrtc_compat()
 
 
 # Local model aliases: map short names to local CTranslate2 model directories.
@@ -322,7 +318,7 @@ class TranscriptionConfig:
     """Configuration for the transcription pipeline."""
 
     model: str = "large-v3-turbo"
-    device: str = "cuda"
+    device: str = ""  # Auto-detected in __post_init__
     compute_type: str = "float16"
     batch_size: int = 16
     language: str = "auto"
@@ -347,6 +343,16 @@ class TranscriptionConfig:
     skip_alignment: bool = False
 
     def __post_init__(self):
+        # Auto-detect device if not explicitly set
+        if not self.device:
+            import torch
+            if torch.cuda.is_available():
+                self.device = "cuda"
+            elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                self.device = "mps"
+            else:
+                self.device = "cpu"
+
         # Resolve model aliases (e.g. "large-v3-turbo" -> local CTranslate2 path)
         self.model = resolve_model(self.model)
 
@@ -678,7 +684,8 @@ def transcribe(audio_file: str | Path, config: TranscriptionConfig | None = None
         # Free transcription model memory
         del model
         gc.collect()
-        torch.cuda.empty_cache()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
         # ── Step 2: Align for word-level timestamps ──
         if config.skip_alignment:
@@ -688,6 +695,7 @@ def transcribe(audio_file: str | Path, config: TranscriptionConfig | None = None
             # the caller (CLI/GUI) can show an actionable error.
             # Free VRAM first so the error handler can download if needed.
             gc.collect()
+            if torch.cuda.is_available():
             torch.cuda.empty_cache()
             raise AlignmentModelMissing(detected_language)
         else:
@@ -708,7 +716,8 @@ def transcribe(audio_file: str | Path, config: TranscriptionConfig | None = None
 
                 del model_a
                 gc.collect()
-                torch.cuda.empty_cache()
+                if torch.cuda.is_available():
+            torch.cuda.empty_cache()
             except Exception as align_exc:
                 # For languages NOT in our registry (WhisperX supports ~39),
                 # we can't pre-check the cache.  If the download fails at
@@ -739,6 +748,7 @@ def transcribe(audio_file: str | Path, config: TranscriptionConfig | None = None
 
             del diarize_model
             gc.collect()
+            if torch.cuda.is_available():
             torch.cuda.empty_cache()
         else:
             print(f"  Skipping diarization (no HF_TOKEN provided)")

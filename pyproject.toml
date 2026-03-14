@@ -30,6 +30,7 @@ classifiers = [
     "Intended Audience :: End Users/Desktop",
     "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
     "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS :: MacOS X",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -54,4 +55,5 @@ Issues = "https://github.com/pretyflaco/meetscribe/issues"
 
 [project.optional-dependencies]
 rtl = ["arabic-reshaper>=3.0", "python-bidi>=0.4"]
+linux = ["pulsectl>=23.0"]
 dev = ["ruff", "pytest"]
